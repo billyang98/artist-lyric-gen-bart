@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.loggers import TensorBoardLogger
 
 import math
 import random
@@ -63,6 +64,16 @@ class LitModel(pl.LightningModule):
 
         return {'loss':loss}
 
+    def training_epoch_end(self, outputs):
+        training_loss = torch.stack([x['loss'] for x in outputs]).mean()
+        self.logger.experiment.add_scalar('training_loss', training_loss, global_step=self.current_epoch)
+        return
+
+    def validation_epoch_end(self, outputs):
+        val_loss = torch.stack([x['loss'] for x in outputs]).mean()
+        self.logger.experiment.add_scalar('val_loss', val_loss, global_step=self.current_epoch)
+        return
+
     def validation_step(self, batch, batch_idx):
 
         src_ids, src_mask = batch[0], batch[1]
@@ -93,11 +104,11 @@ class LitModel(pl.LightningModule):
         )
         return [self.tokenizer.decode(w, skip_special_tokens=True, clean_up_tokenization_spaces=True) for w in generated_ids]
 
-    def freeze_params(model):
-        ''' Function that takes a model as input (or part of a model) and freezes the layers for faster training
-            adapted from finetune.py '''
-        for layer in model.parameters():
-            layer.requires_grade = False
+def freeze_params(model):
+    ''' Function that takes a model as input (or part of a model) and freezes the layers for faster training
+        adapted from finetune.py '''
+    for layer in model.parameters():
+        layer.requires_grade = False
 
 # Create a dataloading module as per the PyTorch Lightning Docs
 class SummaryDataModule(pl.LightningDataModule):
@@ -122,17 +133,17 @@ class SummaryDataModule(pl.LightningDataModule):
     # Load the training, validation and test sets in Pytorch Dataset objects
     def train_dataloader(self):
         dataset = TensorDataset(self.train['input_ids'], self.train['attention_mask'], self.train['labels'])
-        train_data = DataLoader(dataset, sampler = RandomSampler(dataset), batch_size = self.batch_size)
+        train_data = DataLoader(dataset, sampler = RandomSampler(dataset), batch_size = self.batch_size, num_workers=16)
         return train_data
 
     def val_dataloader(self):
         dataset = TensorDataset(self.validate['input_ids'], self.validate['attention_mask'], self.validate['labels'])
-        val_data = DataLoader(dataset, batch_size = self.batch_size)
+        val_data = DataLoader(dataset, batch_size = self.batch_size, num_workers=16)
         return val_data
 
     def test_dataloader(self):
         dataset = TensorDataset(self.test['input_ids'], self.test['attention_mask'], self.test['labels'])
-        test_data = DataLoader(dataset, batch_size = self.batch_size)
+        test_data = DataLoader(dataset, batch_size = self.batch_size, num_workers=16)
         return test_data
 
 # Create the hparams dictionary to pass in the model
@@ -241,13 +252,10 @@ import os
 from transformers import BartTokenizer, BartForConditionalGeneration, AdamW, BartConfig
 myfile = open("support_files/bpe_string_token_to_int.json", "r")
 tokenizer = BartTokenizer.from_pretrained("facebook/bart-base", add_prefix_space=True, bos_token = "S", eos_token = "L", mask_token = "<mask>")
-print(len(tokenizer))
 import json
 toadd = list(json.load(myfile).keys())
-print(len(toadd))
 # #toadd.append("<mask>")
 tokenizer.add_tokens(toadd)
-print(len(tokenizer))
 
 bart_model = BartForConditionalGeneration.from_pretrained("facebook/bart-base")
 bart_model.resize_token_embeddings(len(tokenizer))
@@ -256,21 +264,32 @@ bart_model.resize_token_embeddings(len(tokenizer))
 # hparams for cvae:
 # 256 batch size
 # < 5e-3 learning rate
-summary_data = SummaryDataModule(tokenizer, 'support_files/train_dataset_id.csv', batch_size = 64, num_examples = 775959)
+summary_data = SummaryDataModule(tokenizer, 'support_files/train_dataset_id.csv', batch_size = 256, num_examples = 775959)
 
-# Load the model from a pre-saved checkpoint; alternatively use the code below to start training from scratch
-# model = LitModel.load_from_checkpoint(base_dir + "checkpoint_files_2/8_ep_140k_simple_0210.ckpt",
-#                                       learning_rate = 2e-5, tokenizer = tokenizer, model = bart_model, hparams = hparams)
+checkpoint_dir = 'checkpoint_files'
+checkpoint_dir_contents = os.listdir(checkpoint_dir)
+checkpoint_file = None
+if len(checkpoint_dir_contents) == 0:
+    # load new model
+    model = LitModel(learning_rate = 2e-5, tokenizer = tokenizer, model = bart_model, hparams = hparams)
+else:
+    checkpoint_dir_contents.sort(reverse=True)
+    # load checkpoint model
+    checkpoint_file = "{}/{}".format(checkpoint_dir, checkpoint_dir_contents[0])
+    model = LitModel.load_from_checkpoint(checkpoint_file, learning_rate = 2e-5, tokenizer = tokenizer, model = bart_model, hparams = hparams)
 
-model = LitModel(learning_rate = 2e-5, tokenizer = tokenizer, model = bart_model, hparams = hparams)
 
 checkpoint = ModelCheckpoint(filepath='checkpoint_files/')
-trainer = pl.Trainer(gpus = 1,
-                     max_epochs = 1,
+logger = TensorBoardLogger("tb_logs", name="model", version="version_0")
+# ****REMEMBER: use the correct number of gpus based on which node you get
+trainer = pl.Trainer(gpus = 4,
+                     max_epochs = 25,
                      min_epochs = 1,
                      auto_lr_find = False,
                      checkpoint_callback = checkpoint,
-                     progress_bar_refresh_rate = 25)
+                     progress_bar_refresh_rate = 25,
+                     logger=logger,
+                     resume_from_checkpoint=checkpoint_file)
 
 
 # Fit the instantiated model to the data
