@@ -1,0 +1,6 @@
+transformers
+pandas
+numpy
+torch
+pytorch_lightning
+
