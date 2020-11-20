@@ -28,4 +28,4 @@ cd /work/05347/billyang/artist-lyric-gen-bart     # Move to your working dir.
 
 
 # Training a baseline model from scratch
-python bart.py
+python bart.py --training_file support_files/train_dataset_id.csv --model_name bart_id --max_length 102

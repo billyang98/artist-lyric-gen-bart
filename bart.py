@@ -15,6 +15,22 @@ import random
 import re
 import argparse
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--model_name', type=str,
+                    help='model named used for files + directories')
+parser.add_argument('--training_file', type=str,
+                    help='file with the dataset for training')
+parser.add_argument('--max_length', type=int,
+                    help='the max length of a training example in our dataset')
+
+args = parser.parse_args()
+model_name_for_files = args.model_name
+training_file_name = args.training_file
+max_length_training_example = args.max_length
+assert(model_name_for_files is not None)
+assert(training_file_name is not None)
+assert(max_length_training_example is not None)
+
 class LitModel(pl.LightningModule):
     # Instantiate the model
     def __init__(self, learning_rate, tokenizer, model, hparams):
@@ -120,8 +136,10 @@ class SummaryDataModule(pl.LightningDataModule):
         self.num_examples = num_examples
         print("Reading CSV")
         self.data = pd.read_csv(self.data_file)[:self.num_examples]
+        # self.data = pd.read_csv(self.data_file)[:10]
         print("Splitting data train/val/test")
         self.train, self.validate, self.test = np.split(self.data.sample(frac=1), [621405, 621405 + 75795])
+        # self.train, self.validate, self.test = np.split(self.data.sample(frac=1), [8, 9])
         print("Done preparing data")
 
     # Loads and splits the data into training, validation and test sets with a 60/20/20 split
@@ -183,7 +201,7 @@ def shift_tokens_right(input_ids, pad_token_id):
     prev_output_tokens[:, 1:] = input_ids[:, :-1]
     return prev_output_tokens
 
-def encode_sentences(tokenizer, source_sentences, target_sentences, max_length=102, pad_to_max_length=True, return_tensors="pt"):
+def encode_sentences(tokenizer, source_sentences, target_sentences, max_length=max_length_training_example, pad_to_max_length=True, return_tensors="pt"):
     ''' Function that tokenizes a sentence
         Args: tokenizer - the BART tokenizer; source and target sentences are the source and target sentences
         Returns: Dictionary with keys: input_ids, attention_mask, target_ids
@@ -285,13 +303,15 @@ print('Done Resizing token embeddings model')
 # hparams for cvae:
 # 256 batch size
 # < 5e-3 learning rate
-# p100: < 32 works 
+# p100: < 32 works
 # gtx: < 16 works
 batch_size = 16
 print("**** BATCH SIZE: {} ****".format(batch_size))
-summary_data = SummaryDataModule(tokenizer, 'support_files/train_dataset_id.csv', batch_size = batch_size, num_examples = 775959)
+summary_data = SummaryDataModule(tokenizer, training_file_name, batch_size = batch_size, num_examples = 775959)
 
-checkpoint_dir = 'checkpoint_files'
+checkpoint_dir = 'checkpoints/{}'.format(model_name_for_files)
+if not os.path.exists(checkpoint_dir):
+    os.makedirs(checkpoint_dir)
 checkpoint_dir_contents = os.listdir(checkpoint_dir)
 checkpoint_file = None
 if len(checkpoint_dir_contents) == 0:
@@ -304,8 +324,8 @@ else:
     model = LitModel.load_from_checkpoint(checkpoint_file, learning_rate = 2e-5, tokenizer = tokenizer, model = bart_model, hparams = hparams)
 
 
-checkpoint = ModelCheckpoint(filepath='checkpoint_files/')
-logger = TensorBoardLogger("tb_logs", name="model", version="version_0")
+checkpoint = ModelCheckpoint(filepath=checkpoint_dir)
+logger = TensorBoardLogger("logs", name=model_name_for_files, version="version_0")
 # ****REMEMBER: use the correct number of gpus based on which node you get
 # p100 = 2
 # v100 = 2
@@ -317,7 +337,7 @@ trainer = pl.Trainer(gpus = 4,
                      checkpoint_callback = checkpoint,
                      #progress_bar_refresh_rate = 25,
                      logger=logger,
-		     distributed_backend='ddp',
+                     distributed_backend='ddp',
                      resume_from_checkpoint=checkpoint_file)
 
 
