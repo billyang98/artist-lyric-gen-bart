@@ -118,32 +118,51 @@ class SummaryDataModule(pl.LightningDataModule):
         self.data_file = data_file
         self.batch_size = batch_size
         self.num_examples = num_examples
+        print("Reading CSV")
+        self.data = pd.read_csv(self.data_file)[:self.num_examples]
+        print("Splitting data train/val/test")
+        self.train, self.validate, self.test = np.split(self.data.sample(frac=1), [621405, 621405 + 75795])
+        print("Done preparing data")
 
     # Loads and splits the data into training, validation and test sets with a 60/20/20 split
     def prepare_data(self):
-        self.data = pd.read_csv(self.data_file)[:self.num_examples]
-        self.train, self.validate, self.test = np.split(self.data.sample(frac=1), [621405, 621405 + 75795])
+        pass
+        #self.data = pd.read_csv(self.data_file)[:self.num_examples]
+        #self.train, self.validate, self.test = np.split(self.data.sample(frac=1), [621405, 621405 + 75795])
+        #self.data = pd.read_csv(self.data_file)[:10]
+        #self.train, self.validate, self.test = np.split(self.data.sample(frac=1), [8, 9])
 
     # encode the sentences using the tokenizer
     def setup(self, stage):
+        print('Starting Setup')
+        print('Encoding Train Set')
         self.train = encode_sentences(self.tokenizer, self.train['source'], self.train['target'])
+        print('Encoding Val Set')
         self.validate = encode_sentences(self.tokenizer, self.validate['source'], self.validate['target'])
+        print('Encoding Test Set')
         self.test = encode_sentences(self.tokenizer, self.test['source'], self.test['target'])
+        print('Done Encoding Sets')
 
     # Load the training, validation and test sets in Pytorch Dataset objects
     def train_dataloader(self):
+        print('Making Train Dataloader')
         dataset = TensorDataset(self.train['input_ids'], self.train['attention_mask'], self.train['labels'])
-        train_data = DataLoader(dataset, sampler = RandomSampler(dataset), batch_size = self.batch_size, num_workers=16)
+        train_data = DataLoader(dataset, sampler = RandomSampler(dataset), batch_size = self.batch_size, num_workers=0)
+        print('Done with Train Dataloader')
         return train_data
 
     def val_dataloader(self):
+        print('Making Val Dataloader')
         dataset = TensorDataset(self.validate['input_ids'], self.validate['attention_mask'], self.validate['labels'])
-        val_data = DataLoader(dataset, batch_size = self.batch_size, num_workers=16)
+        val_data = DataLoader(dataset, batch_size = self.batch_size, num_workers=0)
+        print('Done with Val Dataloader')
         return val_data
 
     def test_dataloader(self):
+        print('Making Test Dataloader')
         dataset = TensorDataset(self.test['input_ids'], self.test['attention_mask'], self.test['labels'])
-        test_data = DataLoader(dataset, batch_size = self.batch_size, num_workers=16)
+        test_data = DataLoader(dataset, batch_size = self.batch_size, num_workers=0)
+        print('Done with Test Dataloader')
         return test_data
 
 # Create the hparams dictionary to pass in the model
@@ -258,13 +277,19 @@ toadd = list(json.load(myfile).keys())
 tokenizer.add_tokens(toadd)
 
 bart_model = BartForConditionalGeneration.from_pretrained("facebook/bart-base")
+print('Resizing token embeddings model')
 bart_model.resize_token_embeddings(len(tokenizer))
+print('Done Resizing token embeddings model')
 
 # Load the data into the model for training
 # hparams for cvae:
 # 256 batch size
 # < 5e-3 learning rate
-summary_data = SummaryDataModule(tokenizer, 'support_files/train_dataset_id.csv', batch_size = 256, num_examples = 775959)
+# p100: < 32 works 
+# gtx: < 16 works
+batch_size = 16
+print("**** BATCH SIZE: {} ****".format(batch_size))
+summary_data = SummaryDataModule(tokenizer, 'support_files/train_dataset_id.csv', batch_size = batch_size, num_examples = 775959)
 
 checkpoint_dir = 'checkpoint_files'
 checkpoint_dir_contents = os.listdir(checkpoint_dir)
@@ -282,13 +307,17 @@ else:
 checkpoint = ModelCheckpoint(filepath='checkpoint_files/')
 logger = TensorBoardLogger("tb_logs", name="model", version="version_0")
 # ****REMEMBER: use the correct number of gpus based on which node you get
+# p100 = 2
+# v100 = 2
+# gtx = 4
 trainer = pl.Trainer(gpus = 4,
                      max_epochs = 25,
                      min_epochs = 1,
                      auto_lr_find = False,
                      checkpoint_callback = checkpoint,
-                     progress_bar_refresh_rate = 25,
+                     #progress_bar_refresh_rate = 25,
                      logger=logger,
+		     distributed_backend='ddp',
                      resume_from_checkpoint=checkpoint_file)
 
 
