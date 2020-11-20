@@ -1,6 +1,6 @@
 transformers
 pandas
 numpy
-torch
+torch==1.6.0
 pytorch_lightning
 
