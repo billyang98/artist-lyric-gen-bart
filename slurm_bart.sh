@@ -13,7 +13,7 @@
 #SBATCH -p gtx                   # Queue name: gtx or v100 or p100 -- check availability using "sinfo" command
 #SBATCH -N 1                     # Total number of nodes requested (16 cores/node)
 #SBATCH -n 1                     # Total number of tasks
-#SBATCH -t 4:59:00              # Run time (hh:mm:ss)
+#SBATCH -t 15:00:00              # Run time (hh:mm:ss)
 
 sbatch -A CS378-NLP-sp20      # Specify allocation to charge against
 
@@ -26,5 +26,6 @@ module load cuda
 source /home1/05347/billyang/nlp_artist_gen/bin/activate   # Activate your virtual env here.
 cd /work/05347/billyang/artist-lyric-gen-bart     # Move to your working dir.
 
+
 # Training a baseline model from scratch
-python3 bart.py
+python bart.py
