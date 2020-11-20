@@ -286,8 +286,9 @@ print('Done Resizing token embeddings model')
 # 256 batch size
 # < 5e-3 learning rate
 # p100: < 32 works 
+# gtx: < 16 works
 batch_size = 16
-print("**** BATCH SIZE: {} ****".format(batch_size)
+print("**** BATCH SIZE: {} ****".format(batch_size))
 summary_data = SummaryDataModule(tokenizer, 'support_files/train_dataset_id.csv', batch_size = batch_size, num_examples = 775959)
 
 checkpoint_dir = 'checkpoint_files'
