@@ -30,6 +30,7 @@ max_length_training_example = args.max_length
 assert(model_name_for_files is not None)
 assert(training_file_name is not None)
 assert(max_length_training_example is not None)
+print("**** MAX LENGTH TRAINING EXAMPLE: {} ****".format(max_length_training_example))
 
 class LitModel(pl.LightningModule):
     # Instantiate the model
@@ -331,7 +332,7 @@ logger = TensorBoardLogger("logs", name=model_name_for_files, version="version_0
 # v100 = 2
 # gtx = 4
 trainer = pl.Trainer(gpus = 4,
-                     max_epochs = 25,
+                     max_epochs = 15,
                      min_epochs = 1,
                      auto_lr_find = False,
                      checkpoint_callback = checkpoint,

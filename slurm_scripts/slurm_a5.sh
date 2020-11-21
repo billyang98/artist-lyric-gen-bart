@@ -8,12 +8,12 @@
 # job will be charged as if all 16 cores were requested.
 #-----------------------------------------------------------------
 
-#SBATCH -J artist-gen-bart             # Job name
-#SBATCH -o /work/05347/billyang/artist-lyric-gen-bart/out_dir/%j.out       # Specify stdout output file (%j expands to jobId)
+#SBATCH -J artist-gen-bart-a5             # Job name
+#SBATCH -o /work/05347/billyang/artist-lyric-gen-bart/out_dir/%j-a5.out       # Specify stdout output file (%j expands to jobId)
 #SBATCH -p gtx                   # Queue name: gtx or v100 or p100 -- check availability using "sinfo" command
 #SBATCH -N 1                     # Total number of nodes requested (16 cores/node)
 #SBATCH -n 1                     # Total number of tasks
-#SBATCH -t 15:00:00              # Run time (hh:mm:ss)
+#SBATCH -t 24:00:00              # Run time (hh:mm:ss)
 
 sbatch -A CS378-NLP-sp20      # Specify allocation to charge against
 
@@ -28,4 +28,5 @@ cd /work/05347/billyang/artist-lyric-gen-bart     # Move to your working dir.
 
 
 # Training a baseline model from scratch
-python bart.py --training_file support_files/train_dataset_id.csv --model_name bart_id --max_length 102
+# max length <= 160
+python bart.py --training_file support_files/lyrics_tagged_ablation_5_noised.csv   --model_name bart_a5 --max_length 160
