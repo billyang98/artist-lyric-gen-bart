@@ -139,7 +139,7 @@ class SummaryDataModule(pl.LightningDataModule):
         self.data = pd.read_csv(self.data_file)[:self.num_examples]
         # self.data = pd.read_csv(self.data_file)[:10]
         print("Splitting data train/val/test")
-        self.train, self.validate, self.test = np.split(self.data.sample(frac=1), [621405, 621405 + 75795])
+        self.train, self.validate, self.test = np.split(self.data, [621405, 621405 + 75795])
         # self.train, self.validate, self.test = np.split(self.data.sample(frac=1), [8, 9])
         print("Done preparing data")
 
