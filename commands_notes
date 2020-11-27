@@ -1,0 +1,4 @@
+sbatch
+showq
+squeue
+scancel
